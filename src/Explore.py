@@ -16,7 +16,7 @@ st.markdown(
     unsafe_allow_html=True)
 st.subheader(":violet[Data Overview]")
 
-dataset = pd.read_csv("assets/telecom_customer_churn.csv")
+dataset = pd.read_csv("assets/main.csv")
 dataset_dictionary = pd.read_csv("assets/telecom_data_dictionary.csv", encoding='latin1')
 
 selected = option_menu(menu_title=None, options=["01: Dictionary", "02: Summary",], orientation="horizontal")

@@ -17,7 +17,7 @@ st.markdown(
     unsafe_allow_html=True)
 st.subheader(":violet[Data Visualization]")
 
-dataset = pd.read_csv("assets/telecom_customer_churn.csv")
+dataset = pd.read_csv("assets/main.csv")
 city_Population_dataset = pd.read_csv("assets/telecom_zipcode_population.csv")
 
 dataset_cleaned = dataset.dropna(subset=['Gender', 'Churn Category', 'Tenure in Months', 'Monthly Charge', 'Total Charges'])
