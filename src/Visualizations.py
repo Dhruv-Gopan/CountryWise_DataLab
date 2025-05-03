@@ -208,6 +208,21 @@ if selected_page == "Services":
 if selected_page == "Financial Trends":
     st.subheader(":violet[Profit Margin Distribution]")
 
+financial_df = dataset_cleaned.copy()
+financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
+financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
+financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
+financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
+
+
+monthly_financials = financial_df.groupby('Tenure in Months').agg({
+    'Revenue': 'sum'
+}).reset_index()
+
+
+avg_margin = financial_df['Profit Margin (%)'].mean()
+
+
 filtered_df = financial_df[
     financial_df['Profit Margin (%)'].between(5, 95)
 ]
@@ -260,4 +275,3 @@ fig3 = px.line(
 fig3.update_traces(texttemplate='$%{text:,.0f}', textposition='top center')
 fig3.update_layout(yaxis_tickprefix="$", xaxis_tickangle=-25)
 st.plotly_chart(fig3, use_container_width=True)
-
