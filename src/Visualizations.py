@@ -209,89 +209,96 @@ if selected_page == "Financial Trends":
     st.subheader(":violet[Financial Trends]")
 
     import numpy as np
+    import plotly.express as px
     from datetime import datetime
     from sklearn.linear_model import LinearRegression
 
-    # Prepare financial data
+    # Prepare data
     financial_df = dataset_cleaned.copy()
     financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
-    financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
-    financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
+    financial_df['Profit'] = financial_df['Revenue'] - (financial_df['Revenue'] * 0.7)
     financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
 
-    avg_margin = financial_df['Profit Margin (%)'].mean()
+    # ------------------------------------------
+    # 1. Profit Margin by Churn Category
+    # ------------------------------------------
+    st.subheader(":violet[Profit Margin by Churn Category]")
 
-    # KPI cards
-    total_revenue = financial_df['Revenue'].sum()
-    col1, col2 = st.columns(2)
-    col1.metric("📊 Total Revenue", f"${total_revenue:,.0f}")
-    col2.metric("📈 Avg. Profit Margin", f"{avg_margin:.2f}%")
-
-    # 1. Revenue Over Tenure
-    st.subheader(":violet[Revenue Over Tenure]")
-    revenue_by_tenure = financial_df.groupby('Tenure in Months')['Revenue'].sum().reset_index()
-
-    fig1 = px.line(
-        revenue_by_tenure,
-        x='Tenure in Months',
-        y='Revenue',
-        markers=True,
-        labels={'Revenue': 'Total Revenue (USD)'},
-        title='Total Revenue by Customer Tenure'
+    fig1 = px.box(
+        financial_df,
+        x="Churn Category",
+        y="Profit Margin (%)",
+        color="Churn Category",
+        points="all",
+        title="Profit Margin Distribution by Churn Category"
     )
-    fig1.update_layout(yaxis_tickprefix="$", xaxis_tickformat='d')
+    fig1.update_layout(
+        yaxis_title="Profit Margin (%)",
+        xaxis_title="Churn Category",
+        showlegend=False
+    )
     st.plotly_chart(fig1, use_container_width=True)
 
-    # 2. Profit Margin Distribution
-    st.subheader(":violet[Profit Margin Distribution]")
-    filtered_df = financial_df[
-        financial_df['Profit Margin (%)'].between(5, 95)
-    ]
+    # ------------------------------------------
+    # 2. Monthly Revenue Trend (synthetic dates)
+    # ------------------------------------------
 
-    fig2 = px.histogram(
-        filtered_df, 
-        x='Profit Margin (%)',
-        nbins=30,
-        color_discrete_sequence=['#6A0DAD'],
-        title="Distribution of Estimated Profit Margins"
+    st.subheader(":violet[Monthly Revenue Trend]")
+
+    # Simulate start month (assign first customer to Jan 2020)
+    join_order = financial_df.sort_values(by='Tenure in Months', ascending=False).reset_index(drop=True)
+    join_order['Join Month'] = pd.date_range(start='2020-01-01', periods=len(join_order), freq='D')
+    join_order['Revenue Month'] = join_order['Join Month'] + pd.to_timedelta(join_order['Tenure in Months'] * 30, unit='D')
+    join_order['Revenue Month'] = join_order['Revenue Month'].dt.to_period('M').dt.to_timestamp()
+
+    monthly_revenue = join_order.groupby('Revenue Month')['Revenue'].sum().reset_index()
+
+    fig2 = px.line(
+        monthly_revenue,
+        x="Revenue Month",
+        y="Revenue",
+        title="Revenue Over Time (Simulated Calendar Months)"
     )
-    fig2.add_vline(x=avg_margin, line_dash="dash", line_color="black", annotation_text="Avg", annotation_position="top right")
     fig2.update_layout(
-        xaxis_title="Profit Margin (%)",
-        yaxis_title="Customer Count",
-        bargap=0.1
+        xaxis_title="Month",
+        yaxis_title="Revenue (USD)",
+        yaxis_tickprefix="$"
     )
     st.plotly_chart(fig2, use_container_width=True)
 
-    # 3. Revenue Forecast (Next 6 Months)
-    st.subheader(":violet[Revenue Forecast (Next 6 Months)]")
+    # ------------------------------------------
+    # 3. Top 5 Services by Avg Revenue per Customer
+    # ------------------------------------------
+    st.subheader(":violet[Top Services by Avg Revenue per Customer]")
 
-    X = revenue_by_tenure['Tenure in Months'].values.reshape(-1, 1)
-    y = revenue_by_tenure['Revenue'].values
-    model = LinearRegression().fit(X, y)
+    service_columns = [
+        "Phone Service", "Internet Service", "Online Security", "Online Backup",
+        "Device Protection Plan", "Premium Tech Support", "Streaming TV",
+        "Streaming Movies", "Streaming Music", "Unlimited Data"
+    ]
 
-    future_tenure = np.array(range(revenue_by_tenure['Tenure in Months'].max() + 1,
-                                   revenue_by_tenure['Tenure in Months'].max() + 7))
-    future_preds = model.predict(future_tenure.reshape(-1, 1))
+    avg_revenue_by_service = []
+    for service in service_columns:
+        if service in financial_df.columns:
+            grouped = financial_df[financial_df[service] == 'Yes']
+            if not grouped.empty:
+                avg_revenue = grouped['Revenue'].mean()
+                avg_revenue_by_service.append((service, avg_revenue))
 
-    # Generate readable future month labels
-    start_month = datetime.today().replace(day=1) + pd.DateOffset(months=1)
-    future_labels = [(start_month + pd.DateOffset(months=i)).strftime("%b %Y") for i in range(6)]
+    avg_df = pd.DataFrame(avg_revenue_by_service, columns=["Service", "Avg Revenue"])
+    top_avg = avg_df.sort_values(by="Avg Revenue", ascending=False).head(5)
 
-    forecast_df = pd.DataFrame({
-        "Month": future_labels,
-        "Forecasted Revenue": future_preds
-    })
-
-    fig3 = px.line(
-        forecast_df,
-        x='Month',
-        y='Forecasted Revenue',
-        markers=True,
-        text='Forecasted Revenue',
-        labels={'Forecasted Revenue': 'Revenue (USD)'},
-        title="Forecasted Revenue for the Next 6 Months"
+    fig3 = px.bar(
+        top_avg,
+        x="Service",
+        y="Avg Revenue",
+        color="Service",
+        title="Top 5 Services by Avg Revenue per Customer"
     )
-    fig3.update_traces(texttemplate='$%{text:,.0f}', textposition='top center')
-    fig3.update_layout(yaxis_tickprefix="$", xaxis_tickangle=-25)
+    fig3.update_layout(
+        xaxis_title="Service",
+        yaxis_title="Avg Revenue (USD)",
+        yaxis_tickprefix="$",
+        showlegend=False
+    )
     st.plotly_chart(fig3, use_container_width=True)
