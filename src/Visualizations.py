@@ -207,34 +207,44 @@ if selected_page == "Services":
 # Page 3: Financial Trends and Customer Lifetime
 if selected_page == "Financial Trends":
     st.subheader(":violet[Financial Trends]")
-    # Select visualization
-    st.subheader(":violet[Revenue vs Cost Over Time]")
-
     financial_df = dataset_cleaned.copy()
     financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
+    financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
+    financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
+    financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
+
+    filtered_df = financial_df[
+        (financial_df['Profit Margin (%)'].notnull()) &
+        (financial_df['Profit Margin (%)'] > 0) &
+        (financial_df['Profit Margin (%)'] < 100)
+    ]
+
+    total_revenue = financial_df['Revenue'].sum()
+    avg_margin = filtered_df['Profit Margin (%)'].mean()
+
+    col1, col2 = st.columns(2)
+    col1.metric("Total Revenue", f"${total_revenue:,.0f}")
+    col2.metric("Avg. Profit Margin", f"{avg_margin:.2f}%")
+
+    # ----- Revenue Over Time -----
+    st.subheader(":violet[Revenue Over Customer Tenure]")
     monthly_financials = financial_df.groupby('Tenure in Months').agg({
-        'Monthly Charge': 'mean',
-        'Total Charges': 'sum',
         'Revenue': 'sum'
     }).reset_index()
 
     fig1 = px.line(
         monthly_financials, 
         x='Tenure in Months', 
-        y=['Monthly Charge', 'Revenue'], 
-        labels={"value": "USD", "Tenure in Months": "Tenure (Months)"},
-        title="Monthly Charge vs Cumulative Revenue"
+        y='Revenue',
+        labels={"Revenue": "Revenue (USD)", "Tenure in Months": "Tenure (Months)"},
+        title="Revenue Over Time by Tenure"
     )
     st.plotly_chart(fig1, use_container_width=True)
 
+    # ----- Profit Margin Distribution -----
     st.subheader(":violet[Profit Margin Distribution]")
-
-    financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
-    financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
-    financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
-
     fig2 = px.histogram(
-        financial_df, 
+        filtered_df, 
         x='Profit Margin (%)',
         nbins=40,
         color_discrete_sequence=['indigo']
@@ -246,17 +256,22 @@ if selected_page == "Financial Trends":
     )
     st.plotly_chart(fig2, use_container_width=True)
 
+    # ----- Revenue Forecast -----
     st.subheader(":violet[Revenue Forecast (2025 Estimate)]")
+    from sklearn.linear_model import LinearRegression
+    import numpy as np
 
-    # Forecast revenue based on recent trend
-    recent_revenue = monthly_financials['Revenue'].tail(6).values
-    growth_rate = (recent_revenue[-1] - recent_revenue[0]) / 6
-    forecast_months = list(range(13, 19))
-    forecast_values = [recent_revenue[-1] + growth_rate * i for i in range(1, 7)]
+    X = monthly_financials['Tenure in Months'].values.reshape(-1, 1)
+    y = monthly_financials['Revenue'].values
+
+    model = LinearRegression().fit(X, y)
+    future_months = np.array(range(monthly_financials['Tenure in Months'].max() + 1,
+                                   monthly_financials['Tenure in Months'].max() + 7)).reshape(-1, 1)
+    future_preds = model.predict(future_months)
 
     forecast_df = pd.DataFrame({
-        "Month": forecast_months,
-        "Forecasted Revenue": forecast_values
+        "Month": future_months.flatten(),
+        "Forecasted Revenue": future_preds
     })
 
     fig3 = px.line(
@@ -269,5 +284,4 @@ if selected_page == "Financial Trends":
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-    
    
