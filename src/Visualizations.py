@@ -206,63 +206,87 @@ if selected_page == "Services":
     
 # Page 3: Financial Trends and Customer Lifetime
 if selected_page == "Financial Trends":
-    st.subheader(":violet[Interactive Service Revenue & Churn Explorer]")
+    st.subheader(":violet[Financial Trends]")
 
-    # Dropdown to select a service
+    import numpy as np
+    import pandas as pd
+    import plotly.express as px
+
+    # -------------------------
+    # Setup financial data
+    # -------------------------
+    financial_df = dataset_cleaned.copy()
+    financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
+    financial_df['Churned'] = financial_df['Churn Category'].apply(lambda x: 0 if x == "No Churn" else 1)
+
+
+    st.subheader(":violet[1. Revenue Lost by Churn Category]")
+
+    churned = financial_df[financial_df["Churn Category"] != "No Churn"]
+    churn_loss = churned.groupby("Churn Category")["Revenue"].sum().reset_index().sort_values(by="Revenue", ascending=False)
+
+    fig1 = px.bar(
+        churn_loss,
+        x="Churn Category",
+        y="Revenue",
+        color="Churn Category",
+        title="Total Revenue Lost by Churn Reason",
+        text_auto='.2s'
+    )
+    fig1.update_layout(
+        yaxis_title="Lost Revenue (USD)",
+        yaxis_tickprefix="$",
+        showlegend=False
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    st.subheader(":violet[2. Churn Rate by Churn Category]")
+
+
+    churn_only = financial_df[financial_df["Churn Category"] != "No Churn"]
+
+    churn_cats = churn_only["Churn Category"].value_counts(normalize=True).reset_index()
+    churn_cats.columns = ["Churn Category", "Churn Rate"]
+    churn_cats["Churn Rate (%)"] = churn_cats["Churn Rate"] * 100
+
+    fig2 = px.bar(
+        churn_cats,
+        x="Churn Category",
+        y="Churn Rate (%)",
+        text="Churn Rate (%)",
+        color="Churn Category",
+        title="Churn Breakdown by Category"
+    )
+    fig2.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+    fig2.update_layout(showlegend=False)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # -------------------------
+    # 3. Average Revenue by Service Used
+    # -------------------------
+    st.subheader(":violet[3. Average Revenue by Service Used]")
+
     service_columns = [
         "Phone Service", "Internet Service", "Online Security", "Online Backup",
         "Device Protection Plan", "Premium Tech Support", "Streaming TV",
         "Streaming Movies", "Streaming Music", "Unlimited Data"
     ]
 
-    selected_service = st.selectbox("Choose a Service to Analyze", service_columns)
+    avg_rev = []
+    for service in service_columns:
+        if service in financial_df.columns:
+            rev = financial_df[financial_df[service] == "Yes"]['Revenue'].mean()
+            avg_rev.append((service, rev))
 
-    if selected_service in financial_df.columns:
-        service_df = financial_df[financial_df[selected_service].isin(['Yes', 'No'])]
+    service_df = pd.DataFrame(avg_rev, columns=["Service", "Avg Revenue"]).sort_values(by="Avg Revenue", ascending=False)
 
-        # Revenue distribution plot
-        fig = px.box(
-            service_df,
-            x=selected_service,
-            y="Revenue",
-            color=selected_service,
-            title=f"Revenue Comparison: {selected_service} Users vs Non-Users",
-            points="all"
-        )
-        fig.update_layout(
-            yaxis_title="Revenue (USD)",
-            yaxis_tickprefix="$",
-            showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Churn rate comparison
-        churn_counts = service_df.groupby(selected_service)["Churn Category"].apply(
-            lambda x: (x != "No Churn").sum() / len(x) * 100
-        ).reset_index(name="Churn Rate (%)")
-
-        st.subheader("📉 Churn Rate by Service Usage")
-        fig2 = px.bar(
-            churn_counts,
-            x=selected_service,
-            y="Churn Rate (%)",
-            color=selected_service,
-            text="Churn Rate (%)",
-            color_discrete_sequence=["#ff4d4d", "#28a745"]
-        )
-        fig2.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-        fig2.update_layout(showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
-
-        # Smart Insight Text
-        yes_churn = churn_counts[churn_counts[selected_service] == "Yes"]["Churn Rate (%)"].values[0]
-        no_churn = churn_counts[churn_counts[selected_service] == "No"]["Churn Rate (%)"].values[0]
-        churn_diff = round(yes_churn - no_churn, 2)
-
-        if churn_diff > 0:
-            st.markdown(f"🧠 **Insight:** Customers who use **{selected_service}** churn **{churn_diff}% more** than those who don't. Investigate experience or cost factors.")
-        elif churn_diff < 0:
-            st.markdown(f"🧠 **Insight:** Customers who use **{selected_service}** churn **{abs(churn_diff)}% less** than non-users — a good candidate for promotion or bundling.")
-        else:
-            st.markdown(f"🧠 **Insight:** {selected_service} users and non-users churn at the same rate.")
-
+    fig3 = px.bar(
+        service_df,
+        x="Service",
+        y="Avg Revenue",
+        title="Average Revenue by Service",
+        color="Service",
+        text_auto='.2s'
+    )
+    fig3.update_layout(yaxis_title="Avg Revenue (USD)", yaxis_tickprefix="$", showlegend=False)
+    st.plotly_chart(fig3, use_container_width=True)
