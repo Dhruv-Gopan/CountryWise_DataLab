@@ -206,99 +206,63 @@ if selected_page == "Services":
     
 # Page 3: Financial Trends and Customer Lifetime
 if selected_page == "Financial Trends":
-    st.subheader(":violet[Financial Trends]")
+    st.subheader(":violet[Interactive Service Revenue & Churn Explorer]")
 
-    import numpy as np
-    import plotly.express as px
-    from datetime import datetime
-    from sklearn.linear_model import LinearRegression
-
-    # Prepare data
-    financial_df = dataset_cleaned.copy()
-    financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
-    financial_df['Profit'] = financial_df['Revenue'] - (financial_df['Revenue'] * 0.7)
-    financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
-
-    # ------------------------------------------
-    # 1. Profit Margin by Churn Category
-    # ------------------------------------------
-    st.subheader(":violet[Profit Margin by Churn Category]")
-
-    fig1 = px.box(
-        financial_df,
-        x="Churn Category",
-        y="Profit Margin (%)",
-        color="Churn Category",
-        points="all",
-        title="Profit Margin Distribution by Churn Category"
-    )
-    fig1.update_layout(
-        yaxis_title="Profit Margin (%)",
-        xaxis_title="Churn Category",
-        showlegend=False
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # ------------------------------------------
-    # 2. Monthly Revenue Trend (synthetic dates)
-    # ------------------------------------------
-
-    st.subheader(":violet[Monthly Revenue Trend]")
-
-    # Simulate start month (assign first customer to Jan 2020)
-    join_order = financial_df.sort_values(by='Tenure in Months', ascending=False).reset_index(drop=True)
-    join_order['Join Month'] = pd.date_range(start='2020-01-01', periods=len(join_order), freq='D')
-    join_order['Revenue Month'] = join_order['Join Month'] + pd.to_timedelta(join_order['Tenure in Months'] * 30, unit='D')
-    join_order['Revenue Month'] = join_order['Revenue Month'].dt.to_period('M').dt.to_timestamp()
-
-    monthly_revenue = join_order.groupby('Revenue Month')['Revenue'].sum().reset_index()
-
-    fig2 = px.line(
-        monthly_revenue,
-        x="Revenue Month",
-        y="Revenue",
-        title="Revenue Over Time (Simulated Calendar Months)"
-    )
-    fig2.update_layout(
-        xaxis_title="Month",
-        yaxis_title="Revenue (USD)",
-        yaxis_tickprefix="$"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-
-    # ------------------------------------------
-    # 3. Top 5 Services by Avg Revenue per Customer
-    # ------------------------------------------
-    st.subheader(":violet[Top Services by Avg Revenue per Customer]")
-
+    # Dropdown to select a service
     service_columns = [
         "Phone Service", "Internet Service", "Online Security", "Online Backup",
         "Device Protection Plan", "Premium Tech Support", "Streaming TV",
         "Streaming Movies", "Streaming Music", "Unlimited Data"
     ]
 
-    avg_revenue_by_service = []
-    for service in service_columns:
-        if service in financial_df.columns:
-            grouped = financial_df[financial_df[service] == 'Yes']
-            if not grouped.empty:
-                avg_revenue = grouped['Revenue'].mean()
-                avg_revenue_by_service.append((service, avg_revenue))
+    selected_service = st.selectbox("Choose a Service to Analyze", service_columns)
 
-    avg_df = pd.DataFrame(avg_revenue_by_service, columns=["Service", "Avg Revenue"])
-    top_avg = avg_df.sort_values(by="Avg Revenue", ascending=False).head(5)
+    if selected_service in financial_df.columns:
+        service_df = financial_df[financial_df[selected_service].isin(['Yes', 'No'])]
 
-    fig3 = px.bar(
-        top_avg,
-        x="Service",
-        y="Avg Revenue",
-        color="Service",
-        title="Top 5 Services by Avg Revenue per Customer"
-    )
-    fig3.update_layout(
-        xaxis_title="Service",
-        yaxis_title="Avg Revenue (USD)",
-        yaxis_tickprefix="$",
-        showlegend=False
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+        # Revenue distribution plot
+        fig = px.box(
+            service_df,
+            x=selected_service,
+            y="Revenue",
+            color=selected_service,
+            title=f"Revenue Comparison: {selected_service} Users vs Non-Users",
+            points="all"
+        )
+        fig.update_layout(
+            yaxis_title="Revenue (USD)",
+            yaxis_tickprefix="$",
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Churn rate comparison
+        churn_counts = service_df.groupby(selected_service)["Churn Category"].apply(
+            lambda x: (x != "No Churn").sum() / len(x) * 100
+        ).reset_index(name="Churn Rate (%)")
+
+        st.subheader("📉 Churn Rate by Service Usage")
+        fig2 = px.bar(
+            churn_counts,
+            x=selected_service,
+            y="Churn Rate (%)",
+            color=selected_service,
+            text="Churn Rate (%)",
+            color_discrete_sequence=["#ff4d4d", "#28a745"]
+        )
+        fig2.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        fig2.update_layout(showlegend=False)
+        st.plotly_chart(fig2, use_container_width=True)
+
+        # Smart Insight Text
+        yes_churn = churn_counts[churn_counts[selected_service] == "Yes"]["Churn Rate (%)"].values[0]
+        no_churn = churn_counts[churn_counts[selected_service] == "No"]["Churn Rate (%)"].values[0]
+        churn_diff = round(yes_churn - no_churn, 2)
+
+        if churn_diff > 0:
+            st.markdown(f"🧠 **Insight:** Customers who use **{selected_service}** churn **{churn_diff}% more** than those who don't. Investigate experience or cost factors.")
+        elif churn_diff < 0:
+            st.markdown(f"🧠 **Insight:** Customers who use **{selected_service}** churn **{abs(churn_diff)}% less** than non-users — a good candidate for promotion or bundling.")
+        else:
+            st.markdown(f"🧠 **Insight:** {selected_service} users and non-users churn at the same rate.")
+
