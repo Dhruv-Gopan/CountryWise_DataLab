@@ -208,4 +208,66 @@ if selected_page == "Services":
 if selected_page == "Financial Trends":
     st.subheader(":violet[Financial Trends]")
     # Select visualization
+    st.subheader(":violet[Revenue vs Cost Over Time]")
+
+    financial_df = dataset_cleaned.copy()
+    financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
+    monthly_financials = financial_df.groupby('Tenure in Months').agg({
+        'Monthly Charge': 'mean',
+        'Total Charges': 'sum',
+        'Revenue': 'sum'
+    }).reset_index()
+
+    fig1 = px.line(
+        monthly_financials, 
+        x='Tenure in Months', 
+        y=['Monthly Charge', 'Revenue'], 
+        labels={"value": "USD", "Tenure in Months": "Tenure (Months)"},
+        title="Monthly Charge vs Cumulative Revenue"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    st.subheader(":violet[Profit Margin Distribution]")
+
+    financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
+    financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
+    financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
+
+    fig2 = px.histogram(
+        financial_df, 
+        x='Profit Margin (%)',
+        nbins=40,
+        color_discrete_sequence=['indigo']
+    )
+    fig2.update_layout(
+        title="Distribution of Estimated Profit Margins",
+        xaxis_title="Profit Margin (%)",
+        yaxis_title="Customer Count"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader(":violet[Revenue Forecast (2025 Estimate)]")
+
+    # Forecast revenue based on recent trend
+    recent_revenue = monthly_financials['Revenue'].tail(6).values
+    growth_rate = (recent_revenue[-1] - recent_revenue[0]) / 6
+    forecast_months = list(range(13, 19))
+    forecast_values = [recent_revenue[-1] + growth_rate * i for i in range(1, 7)]
+
+    forecast_df = pd.DataFrame({
+        "Month": forecast_months,
+        "Forecasted Revenue": forecast_values
+    })
+
+    fig3 = px.line(
+        forecast_df, 
+        x='Month', 
+        y='Forecasted Revenue',
+        markers=True,
+        labels={'Month': 'Month (Projected)', 'Forecasted Revenue': 'Revenue (USD)'},
+        title="Forecasted Revenue for Next 6 Months"
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
+    
    
