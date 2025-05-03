@@ -206,82 +206,58 @@ if selected_page == "Services":
     
 # Page 3: Financial Trends and Customer Lifetime
 if selected_page == "Financial Trends":
-    st.subheader(":violet[Financial Trends]")
-    financial_df = dataset_cleaned.copy()
-    financial_df['Revenue'] = financial_df['Monthly Charge'] * financial_df['Tenure in Months']
-    financial_df['Cost Estimate'] = 0.7 * financial_df['Revenue']
-    financial_df['Profit'] = financial_df['Revenue'] - financial_df['Cost Estimate']
-    financial_df['Profit Margin (%)'] = (financial_df['Profit'] / financial_df['Revenue']) * 100
-
-    filtered_df = financial_df[
-        (financial_df['Profit Margin (%)'].notnull()) &
-        (financial_df['Profit Margin (%)'] > 0) &
-        (financial_df['Profit Margin (%)'] < 100)
-    ]
-
-    total_revenue = financial_df['Revenue'].sum()
-    avg_margin = filtered_df['Profit Margin (%)'].mean()
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total Revenue", f"${total_revenue:,.0f}")
-    col2.metric("Avg. Profit Margin", f"{avg_margin:.2f}%")
-
-    # ----- Revenue Over Time -----
-    st.subheader(":violet[Revenue Over Customer Tenure]")
-    monthly_financials = financial_df.groupby('Tenure in Months').agg({
-        'Revenue': 'sum'
-    }).reset_index()
-
-    fig1 = px.line(
-        monthly_financials, 
-        x='Tenure in Months', 
-        y='Revenue',
-        labels={"Revenue": "Revenue (USD)", "Tenure in Months": "Tenure (Months)"},
-        title="Revenue Over Time by Tenure"
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # ----- Profit Margin Distribution -----
     st.subheader(":violet[Profit Margin Distribution]")
-    fig2 = px.histogram(
-        filtered_df, 
-        x='Profit Margin (%)',
-        nbins=40,
-        color_discrete_sequence=['indigo']
-    )
-    fig2.update_layout(
-        title="Distribution of Estimated Profit Margins",
-        xaxis_title="Profit Margin (%)",
-        yaxis_title="Customer Count"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
 
-    # ----- Revenue Forecast -----
-    st.subheader(":violet[Revenue Forecast (2025 Estimate)]")
-    from sklearn.linear_model import LinearRegression
-    import numpy as np
+filtered_df = financial_df[
+    financial_df['Profit Margin (%)'].between(5, 95)
+]
 
-    X = monthly_financials['Tenure in Months'].values.reshape(-1, 1)
-    y = monthly_financials['Revenue'].values
+fig2 = px.histogram(
+    filtered_df, 
+    x='Profit Margin (%)',
+    nbins=30,
+    color_discrete_sequence=['#6A0DAD'],
+    title="Distribution of Estimated Profit Margins"
+)
+fig2.add_vline(x=avg_margin, line_dash="dash", line_color="black", annotation_text="Mean", annotation_position="top right")
+fig2.update_layout(
+    xaxis_title="Profit Margin (%)",
+    yaxis_title="Customer Count",
+    bargap=0.1
+)
+st.plotly_chart(fig2, use_container_width=True)
 
-    model = LinearRegression().fit(X, y)
-    future_months = np.array(range(monthly_financials['Tenure in Months'].max() + 1,
-                                   monthly_financials['Tenure in Months'].max() + 7)).reshape(-1, 1)
-    future_preds = model.predict(future_months)
+st.subheader(":violet[Revenue Forecast (2025 Estimate)]")
 
-    forecast_df = pd.DataFrame({
-        "Month": future_months.flatten(),
-        "Forecasted Revenue": future_preds
-    })
+from datetime import datetime
+from sklearn.linear_model import LinearRegression
 
-    fig3 = px.line(
-        forecast_df, 
-        x='Month', 
-        y='Forecasted Revenue',
-        markers=True,
-        labels={'Month': 'Month (Projected)', 'Forecasted Revenue': 'Revenue (USD)'},
-        title="Forecasted Revenue for Next 6 Months"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+X = monthly_financials['Tenure in Months'].values.reshape(-1, 1)
+y = monthly_financials['Revenue'].values
 
-   
+model = LinearRegression().fit(X, y)
+future_tenure = list(range(X.max() + 1, X.max() + 7))
+future_preds = model.predict(np.array(future_tenure).reshape(-1, 1))
+
+# Generate readable future month labels
+start_month = datetime.today().replace(day=1) + pd.DateOffset(months=1)
+future_labels = [(start_month + pd.DateOffset(months=i)).strftime("%b %Y") for i in range(6)]
+
+forecast_df = pd.DataFrame({
+    "Month": future_labels,
+    "Forecasted Revenue": future_preds
+})
+
+fig3 = px.line(
+    forecast_df, 
+    x='Month', 
+    y='Forecasted Revenue',
+    markers=True,
+    text='Forecasted Revenue',
+    labels={'Forecasted Revenue': 'Revenue (USD)'},
+    title="Forecasted Revenue for the Next 6 Months"
+)
+fig3.update_traces(texttemplate='$%{text:,.0f}', textposition='top center')
+fig3.update_layout(yaxis_tickprefix="$", xaxis_tickangle=-25)
+st.plotly_chart(fig3, use_container_width=True)
+
